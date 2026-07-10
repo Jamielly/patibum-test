@@ -1,6 +1,6 @@
 # push_swap_tester.sh
 
-Script de testes automatizados para o projeto **push_swap** (42), construído
+Script de testes automatizados para o projeto **push_swap**, construído
 com base no projeto. Ele roda a maior parte dos
 itens verificáveis da defesa (exceto os que dependem de interação humana,
 como explicação oral do código) e no final entrega um resumo de
@@ -53,19 +53,19 @@ alunos, explicação oral dos algoritmos, exercício `--count-only`, etc.).
 ### 1. Dar permissão de execução
 
 ```bash
-chmod +x push_swap_tester.sh
+chmod +x patibum-test.sh
 ```
 
 ### 2. Rodar apontando para o repositório do projeto
 
 ```bash
-./push_swap_tester.sh /caminho/para/o/repositorio
+./patibum-test.sh /caminho/para/o/repositorio
 ```
 
 Se você já estiver dentro da pasta do projeto, pode simplesmente rodar:
 
 ```bash
-./push_swap_tester.sh .
+./patibum-test.sh .
 ```
 
 ### 3. (Opcional) especificar os binários manualmente
@@ -75,7 +75,7 @@ checker certo para o seu sistema (`checker_linux`, `checker_Mac` ou
 `fedora_checker`). Se os nomes forem diferentes, informe explicitamente:
 
 ```bash
-./push_swap_tester.sh /caminho/do/repo ./push_swap ./checker_linux
+./patibum-test.sh /caminho/do/repo ./push_swap ./checker_linux
 ```
 
 ## 📦 Requisitos
