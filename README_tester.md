@@ -1,7 +1,7 @@
 # push_swap_tester.sh
 
 Script de testes automatizados para o projeto **push_swap** (42), construído
-com base na régua oficial de avaliação por pares. Ele roda a maior parte dos
+com base no projeto. Ele roda a maior parte dos
 itens verificáveis da defesa (exceto os que dependem de interação humana,
 como explicação oral do código) e no final entrega um resumo de
 aprovação/reprovação por seção, igual à lógica usada na correção.
