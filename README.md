@@ -53,19 +53,19 @@ alunos, explicação oral dos algoritmos, exercício `--count-only`, etc.).
 ### 1. Dar permissão de execução
 
 ```bash
-chmod +x patibum-test.sh
+chmod +x push_swap_tester.sh
 ```
 
 ### 2. Rodar apontando para o repositório do projeto
 
 ```bash
-./patibum-test.sh /caminho/para/o/repositorio
+./push_swap_tester.sh /caminho/para/o/repositorio
 ```
 
 Se você já estiver dentro da pasta do projeto, pode simplesmente rodar:
 
 ```bash
-./patibum-test.sh .
+./push_swap_tester.sh .
 ```
 
 ### 3. (Opcional) especificar os binários manualmente
@@ -75,7 +75,7 @@ checker certo para o seu sistema (`checker_linux`, `checker_Mac` ou
 `fedora_checker`). Se os nomes forem diferentes, informe explicitamente:
 
 ```bash
-./patibum-test.sh /caminho/do/repo ./push_swap ./checker_linux
+./push_swap_tester.sh /caminho/do/repo ./push_swap ./checker_linux
 ```
 
 ## 📦 Requisitos
