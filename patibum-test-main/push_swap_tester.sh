@@ -44,6 +44,7 @@ BLUE='\033[0;34m'; BOLD='\033[1m'; NC='\033[0m'
 TOTAL_SECTIONS=0
 PASSED_SECTIONS=0
 FATAL=0
+CHECKER_MISSING=0
 
 declare -A SECTION_RESULT
 
@@ -67,6 +68,7 @@ subtest() {
 
 info()  { echo -e "  ${YELLOW}[i]${NC} $1"; }
 fatal() { echo -e "${RED}${BOLD}[FATAL] $1${NC}"; FATAL=1; }
+warn_checker() { echo -e "${YELLOW}${BOLD}[AVISO] $1${NC}"; CHECKER_MISSING=1; }
 
 section_score() {
     # $1 = nome  $2 = passou(0/1)
@@ -244,7 +246,7 @@ if [ ! -x "$CHECKER" ]; then
         if [ -x "$c" ]; then CHECKER="$c"; break; fi
     done
     if [ ! -x "$CHECKER" ]; then
-        fatal "Nenhum binário checker executável encontrado no diretório testado ($REPO_DIR)."
+        warn_checker "Nenhum binário checker executável encontrado no diretório testado ($REPO_DIR)."
         echo -e "${YELLOW}${BOLD}Copie o checker do seu campus (checker_linux/checker_Mac/fedora_checker) para dentro dessa pasta antes de rodar o script — sem ele, todas as seções de corretude ficam impossíveis de validar.${NC}"
         SKIP_CHECKER=1
     else
@@ -596,7 +598,9 @@ echo ""
 echo -e "${BOLD}Seções aprovadas: $PASSED_SECTIONS / $TOTAL_SECTIONS${NC}"
 
 if [ $FATAL -eq 1 ]; then
-    echo -e "${RED}${BOLD}Houve falha(s) fatal(is) (compilação/executável). Nota final tende a 0 conforme régua.${NC}"
+    echo -e "${RED}${BOLD}Houve falha(s) fatal(is) de compilação/executável. Nota final tende a 0 conforme régua.${NC}"
+elif [ $CHECKER_MISSING -eq 1 ]; then
+    echo -e "${YELLOW}${BOLD}Compilação e binário OK, mas o checker não foi encontrado — as seções de corretude (4, 6, 7, 9, 10, 11, 14, 15, 16) não puderam ser validadas. Coloque o checker na pasta e rode de novo antes de tirar conclusões sobre a nota.${NC}"
 fi
 
 echo ""
