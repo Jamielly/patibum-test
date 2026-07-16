@@ -84,9 +84,11 @@ count_ops() {
     echo "$($PUSH_SWAP $1 2>/dev/null | wc -l | tr -d ' ')"
 }
 
-# roda push_swap | checker e retorna "OK"/"KO"
+# roda push_swap | checker e retorna "OK"/"KO"/"SEM_BINARIO"/"SEM_CHECKER"
 run_checker() {
     local args="$1"
+    if [ ! -x "$PUSH_SWAP" ]; then echo "SEM_BINARIO"; return; fi
+    if [ ! -x "$CHECKER" ]; then echo "SEM_CHECKER"; return; fi
     $PUSH_SWAP $args 2>/dev/null | $CHECKER $args 2>/dev/null | tail -1
 }
 
@@ -120,7 +122,7 @@ fi
 if [ -f "README.md" ]; then
     subtest "README.md presente" 0
     FIRST_LINE=$(head -n1 README.md)
-    if echo "$FIRST_LINE" | grep -q "Esta atividade foi criada como parte do currículo 42 por"; then
+    if echo "$FIRST_LINE" | grep -qiE "(this project has been created as part of the 42 curriculum by|esta atividade foi criada como parte do currículo 42 por)"; then
         subtest "Primeira linha do README no formato esperado" 0
     else
         subtest "Primeira linha do README no formato esperado (encontrado: '$FIRST_LINE')" 1
@@ -228,23 +230,40 @@ fi
 
 section_score "Compilação" $COMPILE_OK
 
+SKIP_FUNCTIONAL=0
 if [ ! -x "$PUSH_SWAP" ]; then
-    fatal "Executável push_swap não encontrado/gerado ($PUSH_SWAP). Encerrando testes funcionais."
-    echo -e "\n${RED}${BOLD}Avaliação interrompida: sem executável, nota = 0 (conforme régua).${NC}"
-    exit 1
+    fatal "Executável push_swap não encontrado/gerado ($PUSH_SWAP)."
+    echo -e "${YELLOW}${BOLD}As seções seguintes que dependem do binário serão marcadas como PULADAS, mas o script continua até o resumo final.${NC}"
+    SKIP_FUNCTIONAL=1
 fi
 
+SKIP_CHECKER=0
 if [ ! -x "$CHECKER" ]; then
     info "Checker '$CHECKER' não encontrado/sem permissão de execução — tentando localizar alternativa..."
     for c in ./checker_linux ./checker_Mac ./fedora_checker ./checker; do
         if [ -x "$c" ]; then CHECKER="$c"; break; fi
     done
     if [ ! -x "$CHECKER" ]; then
-        fatal "Nenhum binário checker executável encontrado. Vários testes serão pulados."
+        fatal "Nenhum binário checker executável encontrado no diretório testado ($REPO_DIR)."
+        echo -e "${YELLOW}${BOLD}Copie o checker do seu campus (checker_linux/checker_Mac/fedora_checker) para dentro dessa pasta antes de rodar o script — sem ele, todas as seções de corretude ficam impossíveis de validar.${NC}"
+        SKIP_CHECKER=1
     else
         info "Usando checker: $CHECKER"
     fi
+else
+    info "Usando checker: $CHECKER"
 fi
+
+if [ "$SKIP_FUNCTIONAL" -eq 1 ]; then
+    for sec in "Gerenciamento de erros" "Seleção de estratégia (básico)" "Entradas já ordenadas" \
+               "Entradas pequenas (3 números)" "Entradas médias (5 números)" "Benchmark / desordem" \
+               "Entradas grandes (100 números)" "Comparação de flags de estratégia" \
+               "Entradas muito grandes (500 números)" "Vazamentos de memória" "Robustez / sem crash"; do
+        header "${sec^^}"
+        info "Pulada — sem binário push_swap executável."
+        section_score "$sec" 1
+    done
+else
 
 # ------------------------------------------------------------------------- #
 # 3. GERENCIAMENTO DE ERROS (push_swap)
@@ -470,11 +489,16 @@ for c in "${crash_cases[@]}"; do
     fi
 done
 section_score "Robustez / sem crash" $CRASH_OK
+fi
 
 # ------------------------------------------------------------------------- #
 # 14. PROGRAMA CHECKER — GERENCIAMENTO DE ERROS
 # ------------------------------------------------------------------------- #
 header "14. CHECKER — GERENCIAMENTO DE ERROS"
+if [ "$SKIP_CHECKER" -eq 1 ]; then
+    info "Pulada — checker não encontrado. Coloque o binário do checker na pasta do projeto."
+    section_score "Checker - gerenciamento de erros" 1
+else
 CHK_ERR_PASS=0
 
 out=$($CHECKER abc def 2>&1 1>/dev/null)
@@ -505,11 +529,16 @@ echo "$out" | grep -qi "error"; r=$?; subtest "Checker: espaços extras na açã
 
 info "Nota: se pelo menos 1 destes falhar, a régua manda zerar a seção inteira."
 [ $CHK_ERR_PASS -eq 6 ]; section_score "Checker - gerenciamento de erros" $?
+fi
 
 # ------------------------------------------------------------------------- #
 # 15. PROGRAMA CHECKER — TESTES FALSOS (deve dar KO)
 # ------------------------------------------------------------------------- #
 header "15. CHECKER — TESTES FALSOS (esperado KO)"
+if [ "$SKIP_CHECKER" -eq 1 ]; then
+    info "Pulada — checker não encontrado."
+    section_score "Checker - testes falsos" 1
+else
 CHK_FALSE_OK=0
 
 res=$(printf 'sa\npb\nrrr\n' | $CHECKER 0 9 1 8 2 7 3 6 4 5 2>/dev/null | tail -1)
@@ -521,11 +550,16 @@ if [ "$res" = "KO" ]; then subtest "Instruções aleatórias inválidas -> KO" 0
 else subtest "Instruções aleatórias inválidas -> KO (obteve '$res')" 1; CHK_FALSE_OK=1; fi
 
 section_score "Checker - testes falsos" $CHK_FALSE_OK
+fi
 
 # ------------------------------------------------------------------------- #
 # 16. PROGRAMA CHECKER — TESTES CORRETOS (deve dar OK)
 # ------------------------------------------------------------------------- #
 header "16. CHECKER — TESTES CORRETOS (esperado OK)"
+if [ "$SKIP_CHECKER" -eq 1 ]; then
+    info "Pulada — checker não encontrado."
+    section_score "Checker - testes corretos" 1
+else
 CHK_TRUE_OK=0
 
 res=$(printf '' | $CHECKER 0 1 2 2>/dev/null | tail -1)
@@ -536,13 +570,16 @@ res=$(printf 'pb\nra\npb\nra\nsa\nra\npa\npa\n' | $CHECKER 0 9 1 8 2 2>/dev/null
 if [ "$res" = "OK" ]; then subtest "[pb,ra,pb,ra,sa,ra,pa,pa] ordena -> OK" 0
 else subtest "[pb,ra,pb,ra,sa,ra,pa,pa] ordena -> OK (obteve '$res')" 1; CHK_TRUE_OK=1; fi
 
-RAND_ARG=$(shuf -i 1-100 -n 10 | tr '\n' ' ')
-RAND_INSTR=$($PUSH_SWAP $RAND_ARG 2>/dev/null)
-res=$(echo "$RAND_INSTR" | $CHECKER $RAND_ARG 2>/dev/null | tail -1)
-if [ "$res" = "OK" ]; then subtest "Instruções reais do push_swap ordenam -> OK" 0
-else subtest "Instruções reais do push_swap ordenam -> OK (obteve '$res')" 1; CHK_TRUE_OK=1; fi
+if [ "$SKIP_FUNCTIONAL" -eq 0 ]; then
+    RAND_ARG=$(shuf -i 1-100 -n 10 | tr '\n' ' ')
+    RAND_INSTR=$($PUSH_SWAP $RAND_ARG 2>/dev/null)
+    res=$(echo "$RAND_INSTR" | $CHECKER $RAND_ARG 2>/dev/null | tail -1)
+    if [ "$res" = "OK" ]; then subtest "Instruções reais do push_swap ordenam -> OK" 0
+    else subtest "Instruções reais do push_swap ordenam -> OK (obteve '$res')" 1; CHK_TRUE_OK=1; fi
+fi
 
 section_score "Checker - testes corretos" $CHK_TRUE_OK
+fi
 
 # ------------------------------------------------------------------------- #
 # RESUMO FINAL
