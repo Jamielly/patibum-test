@@ -129,7 +129,7 @@ if [ -f "README.md" ]; then
     else
         subtest "Primeira linha do README no formato esperado (encontrado: '$FIRST_LINE')" 1
     fi
-    for sec in "Descrição" "Instruções" "Recursos"; do
+    for sec in "Description" "Instructions" "Resources"; do
         if grep -qi "$sec" README.md; then
             subtest "Seção '$sec' presente no README" 0
         else

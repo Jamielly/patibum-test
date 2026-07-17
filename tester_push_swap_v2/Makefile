@@ -18,7 +18,7 @@ SRC			= checker.c
 TESTER		= push_swap_tester.sh
 
 # Pasta do projeto push_swap a ser avaliado.
-# Ex: make test REPO=~/Downloads/Avaliados/push_swap_yann
+# Ex: make test REPO=~/Downloads/push_swap
 REPO		?= .
 
 # ---------------------------------------------------------------------------
