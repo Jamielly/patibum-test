@@ -7,7 +7,7 @@ código) e no final entrega um resumo de aprovação/reprovação por seção,
 igual à lógica usada na correção.
 
 Vem com um **checker próprio** (`checker.c`), compilado localmente pelo
-Makefile — sem depender de nenhum binário externo.
+Makefile — sem depender de nenhum binário externo do campus.
 
 ## 🎯 Finalidade
 
@@ -53,7 +53,7 @@ baixar nem copiar nenhum binário do campus.
 ### 2. Rodar os testes
 
 ```bash
-make test REPO=/caminho/para/o/repositorio/
+make test REPO=/caminho/para/o/repositorio/do/aluno
 ```
 
 Se você já estiver dentro da pasta do projeto avaliado, ou não passar
