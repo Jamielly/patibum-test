@@ -18,7 +18,7 @@ SRC			= checker.c
 TESTER		= push_swap_tester.sh
 
 # Pasta do projeto push_swap a ser avaliado.
-# Ex: make test REPO=~/Downloads/push_swap
+# Ex: make test REPO=~/Downloads/Avaliados/push_swap_yann
 REPO		?= .
 
 # ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ $(NAME): $(SRC)
 
 test: checker
 	@chmod +x $(TESTER)
-	@./$(TESTER) "$(REPO)" ./push_swap ./$(NAME)
+	@./$(TESTER) "$(REPO)" ./push_swap "$(CURDIR)/$(NAME)"
 
 clean:
 	@rm -f $(NAME)

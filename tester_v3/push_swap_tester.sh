@@ -2,15 +2,28 @@
 ###############################################################################
 #  PUSH_SWAP TESTER — baseado na régua de avaliação 42
 #
-#  Uso:
-#     ./push_swap_tester.sh [caminho_do_repo] [push_swap_bin] [checker_bin]
+#  USO:
+#     ./push_swap_tester.sh [pasta_do_repo] [bin_push_swap] [bin_checker]
 #
-#  Exemplos:
-#     ./push_swap_tester.sh                     # assume diretório atual
+#  Os 3 argumentos são POSICIONAIS e OPCIONAIS, com valores padrão:
+#     pasta_do_repo  -> "."           (diretório atual)
+#     bin_push_swap  -> "./push_swap" (relativo à pasta_do_repo, DEPOIS do cd)
+#     bin_checker    -> detectado automaticamente (checker_linux/checker_Mac/
+#                        fedora_checker), procurado dentro da pasta_do_repo
+#
+#  IMPORTANTE: os caminhos de bin_push_swap e bin_checker são relativos à
+#  PASTA DO REPO AVALIADO, não à pasta de onde você chama o script. Se o
+#  tester estiver numa subpasta (ex: tester_push_swap_v2/), rodando de lá
+#  aponte pasta_do_repo como ".." e o checker pelo caminho que o make usa,
+#  ou prefira `make test REPO=..` (veja o Makefile do projeto tester).
+#
+#  EXEMPLOS:
+#     ./push_swap_tester.sh                              # tudo no diretório atual
 #     ./push_swap_tester.sh ~/push_swap
 #     ./push_swap_tester.sh . ./push_swap ./checker_linux
+#     ./push_swap_tester.sh .. ./push_swap ./tester_push_swap_v2/checker_linux
 #
-#  Requisitos opcionais: valgrind (leak check), norminette (norma)
+#  Requisitos opcionais: valgrind (seção 12), norminette (seção 1)
 ###############################################################################
 
 set -u
@@ -18,8 +31,10 @@ set -u
 # ------------------------------------------------------------------------- #
 # CONFIGURAÇÃO
 # ------------------------------------------------------------------------- #
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${1:-.}"
 cd "$REPO_DIR" || { echo "Diretório não encontrado: $REPO_DIR"; exit 1; }
+REPO_DIR_ABS="$(pwd)"
 
 PUSH_SWAP="${2:-./push_swap}"
 
@@ -47,6 +62,24 @@ FATAL=0
 CHECKER_MISSING=0
 
 declare -A SECTION_RESULT
+SECTION_ORDER=()
+
+echo -e "${BLUE}${BOLD}==================================================${NC}"
+echo -e "${BLUE}${BOLD}  CONFIGURAÇÃO DESTA EXECUÇÃO${NC}"
+echo -e "${BLUE}${BOLD}==================================================${NC}"
+echo "  Repositório avaliado : $REPO_DIR_ABS"
+echo "  Binário push_swap    : $PUSH_SWAP"
+echo "  Checker (candidato)  : $CHECKER  (confirmado/ajustado na seção 2)"
+echo "  Se algum desses caminhos estiver errado, rode de novo assim:"
+echo "      ./push_swap_tester.sh <pasta_do_repo> <bin_push_swap> <bin_checker>"
+
+if [ "$SCRIPT_DIR" = "$REPO_DIR_ABS" ] && [ -f "$SCRIPT_DIR/checker.c" ]; then
+    echo ""
+    echo -e "${RED}${BOLD}  [ATENÇÃO] A pasta avaliada é a MESMA pasta onde está este tester${NC}"
+    echo -e "${RED}${BOLD}  (tem um checker.c aqui do lado do push_swap_tester.sh). Isso quase${NC}"
+    echo -e "${RED}${BOLD}  sempre significa que você esqueceu de apontar para o projeto do${NC}"
+    echo -e "${RED}${BOLD}  aluno. Rode assim: ./push_swap_tester.sh /caminho/do/projeto${NC}"
+fi
 
 # ------------------------------------------------------------------------- #
 # HELPERS
@@ -73,6 +106,7 @@ warn_checker() { echo -e "${YELLOW}${BOLD}[AVISO] $1${NC}"; CHECKER_MISSING=1; }
 section_score() {
     # $1 = nome  $2 = passou(0/1)
     TOTAL_SECTIONS=$((TOTAL_SECTIONS+1))
+    SECTION_ORDER+=("$1")
     if [ "$2" -eq 0 ]; then
         PASSED_SECTIONS=$((PASSED_SECTIONS+1))
         SECTION_RESULT["$1"]="PASS"
@@ -83,15 +117,23 @@ section_score() {
 
 # conta instruções produzidas pelo push_swap para um dado argumento
 count_ops() {
-    echo "$($PUSH_SWAP $1 2>/dev/null | wc -l | tr -d ' ')"
+    echo "$("$PUSH_SWAP" $1 2>/dev/null | wc -l | tr -d ' ')"
 }
 
 # roda push_swap | checker e retorna "OK"/"KO"/"SEM_BINARIO"/"SEM_CHECKER"
 run_checker() {
     local args="$1"
+    local nums=""
+    local tok
     if [ ! -x "$PUSH_SWAP" ]; then echo "SEM_BINARIO"; return; fi
     if [ ! -x "$CHECKER" ]; then echo "SEM_CHECKER"; return; fi
-    $PUSH_SWAP $args 2>/dev/null | $CHECKER $args 2>/dev/null | tail -1
+    for tok in $args; do
+        case "$tok" in
+            --*) ;;
+            *) nums="$nums $tok" ;;
+        esac
+    done
+    "$PUSH_SWAP" $args 2>/dev/null | "$CHECKER" $nums 2>/dev/null | tail -1
 }
 
 check_no_segfault() {
@@ -108,7 +150,7 @@ check_no_segfault() {
 is_sorted_stdout_empty() {
     # verifica se não produziu nenhuma saída (entrada já ordenada)
     local out
-    out=$($PUSH_SWAP "$@" 2>/dev/null)
+    out=$("$PUSH_SWAP" "$@" 2>/dev/null)
     [ -z "$out" ]
 }
 
@@ -129,11 +171,13 @@ if [ -f "README.md" ]; then
     else
         subtest "Primeira linha do README no formato esperado (encontrado: '$FIRST_LINE')" 1
     fi
-    for sec in "Description" "Instructions" "Resources"; do
-        if grep -qi "$sec" README.md; then
-            subtest "Seção '$sec' presente no README" 0
+    info "Checagem de seções do README abaixo é uma convenção opcional (não é regra oficial da 42) — reprovar aqui não afeta a nota."
+    for sec in "Descrição|Description" "Instruções|Instructions" "Recursos|Resources"; do
+        label="${sec%%|*}"
+        if grep -qiE "$sec" README.md; then
+            subtest "Seção '$label' (ou equivalente em inglês) presente no README" 0
         else
-            subtest "Seção '$sec' presente no README" 1
+            subtest "Seção '$label' (ou equivalente em inglês) presente no README" 1
         fi
     done
 else
@@ -151,7 +195,15 @@ fi
 # ------------------------------------------------------------------------- #
 header "1. NORMINETTE"
 if command -v norminette >/dev/null 2>&1; then
-    NORM_OUT=$(norminette $(find . -maxdepth 3 -name "*.c" -o -name "*.h") 2>/dev/null)
+    if [ "$SCRIPT_DIR" = "$REPO_DIR_ABS" ]; then
+        NORM_FILES=$(find . -maxdepth 3 \( -name "*.c" -o -name "*.h" \) -not -name "checker.c")
+    elif [[ "$SCRIPT_DIR" == "$REPO_DIR_ABS"/* ]]; then
+        PRUNE_REL="${SCRIPT_DIR#"$REPO_DIR_ABS"/}"
+        NORM_FILES=$(find . -maxdepth 3 \( -name "*.c" -o -name "*.h" \) -not -path "./$PRUNE_REL/*")
+    else
+        NORM_FILES=$(find . -maxdepth 3 \( -name "*.c" -o -name "*.h" \))
+    fi
+    NORM_OUT=$(norminette $NORM_FILES 2>/dev/null)
     if echo "$NORM_OUT" | grep -qi "Error"; then
         echo "$NORM_OUT" | grep -i "Error" | head -20
         subtest "Norminette sem erros" 1
@@ -267,11 +319,24 @@ else
 fi
 
 if [ "$SKIP_FUNCTIONAL" -eq 1 ]; then
+    declare -A SKIP_TITLES=(
+        ["Gerenciamento de erros"]="3. GERENCIAMENTO DE ERROS — push_swap"
+        ["Seleção de estratégia (básico)"]="4. SELEÇÃO DE ESTRATÉGIA — BÁSICO"
+        ["Entradas já ordenadas"]="5. ENTRADAS JÁ ORDENADAS (IDENTIDADE)"
+        ["Entradas pequenas (3 números)"]="6. ENTRADAS PEQUENAS (3 NÚMEROS)"
+        ["Entradas médias (5 números)"]="7. ENTRADAS MÉDIAS (5 NÚMEROS)"
+        ["Benchmark / desordem"]="8. MODO BENCHMARK / CÁLCULO DE DESORDEM"
+        ["Entradas grandes (100 números)"]="9. ENTRADAS GRANDES (100 NÚMEROS)"
+        ["Comparação de flags de estratégia"]="10. COMPARAÇÃO DE FLAGS (50 NÚMEROS)"
+        ["Entradas muito grandes (500 números)"]="11. ENTRADAS MUITO GRANDES (500 NÚMEROS)"
+        ["Vazamentos de memória"]="12. VAZAMENTOS DE MEMÓRIA — push_swap"
+        ["Robustez / sem crash"]="13. ROBUSTEZ (SEM SEGFAULT/CRASH)"
+    )
     for sec in "Gerenciamento de erros" "Seleção de estratégia (básico)" "Entradas já ordenadas" \
                "Entradas pequenas (3 números)" "Entradas médias (5 números)" "Benchmark / desordem" \
                "Entradas grandes (100 números)" "Comparação de flags de estratégia" \
                "Entradas muito grandes (500 números)" "Vazamentos de memória" "Robustez / sem crash"; do
-        header "${sec^^}"
+        header "${SKIP_TITLES[$sec]}"
         info "Pulada — sem binário push_swap executável."
         section_score "$sec" 1
     done
@@ -283,19 +348,19 @@ else
 header "3. GERENCIAMENTO DE ERROS — push_swap"
 ERR_PASS=0; ERR_TOTAL=4
 
-out=$($PUSH_SWAP abc def 2>&1 1>/dev/null)
+out=$("$PUSH_SWAP" abc def 2>&1 1>/dev/null)
 if echo "$out" | grep -qi "error"; then subtest "Parâmetros não numéricos -> Error" 0; ERR_PASS=$((ERR_PASS+1))
 else subtest "Parâmetros não numéricos -> Error" 1; fi
 
-out=$($PUSH_SWAP 1 2 2 2>&1 1>/dev/null)
+out=$("$PUSH_SWAP" 1 2 2 2>&1 1>/dev/null)
 if echo "$out" | grep -qi "error"; then subtest "Número duplicado -> Error" 0; ERR_PASS=$((ERR_PASS+1))
 else subtest "Número duplicado -> Error" 1; fi
 
-out=$($PUSH_SWAP 1 2 99999999999999 2>&1 1>/dev/null)
+out=$("$PUSH_SWAP" 1 2 99999999999999 2>&1 1>/dev/null)
 if echo "$out" | grep -qi "error"; then subtest "Overflow (> MAXINT) -> Error" 0; ERR_PASS=$((ERR_PASS+1))
 else subtest "Overflow (> MAXINT) -> Error" 1; fi
 
-out=$($PUSH_SWAP 2>&1)
+out=$("$PUSH_SWAP" 2>&1)
 if [ -z "$out" ]; then subtest "Sem parâmetros -> nenhuma saída" 0; ERR_PASS=$((ERR_PASS+1))
 else subtest "Sem parâmetros -> nenhuma saída (obteve: '$out')" 1; fi
 
@@ -328,11 +393,12 @@ header "5. ENTRADAS JÁ ORDENADAS (IDENTIDADE)"
 SORTED_PASS=0; SORTED_TOTAL=4
 
 for args in "42" "2 3" "0 1 2 3" "0 1 2 3 4 5 6 7 8 9"; do
-    if is_sorted_stdout_empty $args; then
+    out_check=$("$PUSH_SWAP" $args 2>/dev/null)
+    if [ -z "$out_check" ]; then
         subtest "push_swap $args -> sem saída" 0
         SORTED_PASS=$((SORTED_PASS+1))
     else
-        subtest "push_swap $args -> sem saída" 1
+        subtest "push_swap $args -> sem saída (obteve $(echo "$out_check" | wc -l | tr -d ' ') linha(s) de instrução)" 1
     fi
 done
 
@@ -383,21 +449,21 @@ section_score "Entradas médias (5 números)" $MED_OK
 header "8. MODO BENCHMARK / CÁLCULO DE DESORDEM"
 BENCH_OK=0
 
-out=$($PUSH_SWAP --bench --simple 5 4 3 2 1 2>/dev/null)
+out=$("$PUSH_SWAP" --bench --simple 5 4 3 2 1 2>/dev/null)
 if [ -n "$out" ]; then subtest "--bench --simple produz saída de ordenação" 0
 else subtest "--bench --simple produz saída de ordenação" 1; BENCH_OK=1; fi
 
-bench_stats=$($PUSH_SWAP --bench --simple 5 4 3 2 1 2>&1 1>/dev/null)
+bench_stats=$("$PUSH_SWAP" --bench --simple 5 4 3 2 1 2>&1)
 for kw in "%" ; do
     if echo "$bench_stats" | grep -q "$kw"; then subtest "Relatório de benchmark contém percentual de desordem" 0
-    else subtest "Relatório de benchmark contém percentual de desordem" 1; BENCH_OK=1; fi
+    else subtest "Relatório de benchmark contém percentual de desordem (não achei '%' — pode ser que o formato do aluno seja outro, veja a saída completa abaixo antes de reprovar)" 1; BENCH_OK=1; fi
     break
 done
 info "Saída de estatísticas do benchmark:"
 echo "$bench_stats" | sed 's/^/      /'
 
-d_sorted=$($PUSH_SWAP --bench --simple 1 2 3 4 5 2>&1 1>/dev/null | grep -oE "[0-9]+([.,][0-9]+)?%" | head -1)
-d_reversed=$($PUSH_SWAP --bench --simple 5 4 3 2 1 2>&1 1>/dev/null | grep -oE "[0-9]+([.,][0-9]+)?%" | head -1)
+d_sorted=$("$PUSH_SWAP" --bench --simple 1 2 3 4 5 2>&1 | grep -oE "[0-9]+([.,][0-9]+)?%" | head -1)
+d_reversed=$("$PUSH_SWAP" --bench --simple 5 4 3 2 1 2>&1 | grep -oE "[0-9]+([.,][0-9]+)?%" | head -1)
 info "Desordem entrada ordenada (esperado ~0%): $d_sorted"
 info "Desordem entrada inversa (esperado ~100%): $d_reversed"
 
@@ -473,13 +539,19 @@ header "12. VAZAMENTOS DE MEMÓRIA — push_swap"
 LEAK_OK=0
 if command -v valgrind >/dev/null 2>&1; then
     ARG=$(shuf -i 1-500 -n 100 | tr '\n' ' ')
-    VOUT=$(valgrind --leak-check=full --error-exitcode=42 $PUSH_SWAP $ARG 2>&1 1>/dev/null)
-    if echo "$VOUT" | grep -q "definitely lost: 0 bytes" && ! echo "$VOUT" | grep -q "Invalid"; then
+    VOUT=$(valgrind --leak-check=full --error-exitcode=42 "$PUSH_SWAP" $ARG 2>&1 1>/dev/null)
+    if (echo "$VOUT" | grep -q "definitely lost: 0 bytes" || echo "$VOUT" | grep -q "no leaks are possible") && ! echo "$VOUT" | grep -q "Invalid"; then
         subtest "Sem vazamentos definitivos / acessos inválidos (valgrind)" 0
-    else
-        subtest "Sem vazamentos definitivos / acessos inválidos (valgrind)" 1
+    elif echo "$VOUT" | grep -qE "definitely lost|Invalid (read|write)"; then
+        LEAK_REASON=$(echo "$VOUT" | grep -E "definitely lost|Invalid (read|write)" | head -1 | sed 's/^ *//')
+        subtest "Vazamento/acesso inválido detectado pelo valgrind: $LEAK_REASON" 1
         LEAK_OK=1
         echo "$VOUT" | grep -E "lost|Invalid" | sed 's/^/      /'
+    else
+        subtest "Não foi possível confirmar o resultado do valgrind (saída fora do padrão esperado — não é o mesmo que vazamento confirmado)" 1
+        LEAK_OK=1
+        info "Saída completa do valgrind para conferência manual:"
+        echo "$VOUT" | tail -20 | sed 's/^/      /'
     fi
 else
     info "valgrind não instalado — tente 'leaks' (macOS) ou instale valgrind manualmente."
@@ -493,7 +565,7 @@ header "13. ROBUSTEZ (SEM SEGFAULT/CRASH)"
 CRASH_OK=0
 crash_cases=("" "1" "1 1" "a b c" "99999999999999999999" "-- 1 2 3" "--simple --medium 1 2 3")
 for c in "${crash_cases[@]}"; do
-    if check_no_segfault "$PUSH_SWAP $c"; then
+    if check_no_segfault "\"$PUSH_SWAP\" $c"; then
         subtest "push_swap $c -> sem crash" 0
     else
         subtest "push_swap $c -> CRASH DETECTADO" 1
@@ -513,29 +585,29 @@ if [ "$SKIP_CHECKER" -eq 1 ]; then
 else
 CHK_ERR_PASS=0
 
-out=$($CHECKER abc def 2>&1 1>/dev/null)
+out=$("$CHECKER" abc def 2>&1 1>/dev/null)
 echo "$out" | grep -qi "error"; subtest "Checker: parâmetros não numéricos -> Error" $?
 [ $? -eq 0 ] && CHK_ERR_PASS=$((CHK_ERR_PASS+1))
 
-out=$($CHECKER 1 2 2 2>&1 1>/dev/null)
+out=$("$CHECKER" 1 2 2 2>&1 1>/dev/null)
 echo "$out" | grep -qi "error"; r=$?; subtest "Checker: número duplicado -> Error" $r
 [ $r -eq 0 ] && CHK_ERR_PASS=$((CHK_ERR_PASS+1))
 
-out=$($CHECKER 1 2 99999999999999 2>&1 1>/dev/null)
+out=$("$CHECKER" 1 2 99999999999999 2>&1 1>/dev/null)
 echo "$out" | grep -qi "error"; r=$?; subtest "Checker: overflow -> Error" $r
 [ $r -eq 0 ] && CHK_ERR_PASS=$((CHK_ERR_PASS+1))
 
-out=$($CHECKER < /dev/null 2>&1)
-[ -z "$out" ]; r=$?; subtest "Checker: sem parâmetros -> sem saída" $r
+out=$("$CHECKER" < /dev/null 2>&1)
+[ "$out" = "OK" ]; r=$?; subtest "Checker: sem parâmetros -> OK (pilha vazia)" $r
 [ $r -eq 0 ] && CHK_ERR_PASS=$((CHK_ERR_PASS+1))
 
 out=$(echo "sa
 xx
-rrr" | $CHECKER 1 2 3 2>&1 1>/dev/null)
+rrr" | "$CHECKER" 1 2 3 2>&1 1>/dev/null)
 echo "$out" | grep -qi "error"; r=$?; subtest "Checker: ação inexistente -> Error" $r
 [ $r -eq 0 ] && CHK_ERR_PASS=$((CHK_ERR_PASS+1))
 
-out=$(printf ' sa \nrrr\n' | $CHECKER 1 2 3 2>&1 1>/dev/null)
+out=$(printf ' sa \nrrr\n' | "$CHECKER" 1 2 3 2>&1 1>/dev/null)
 echo "$out" | grep -qi "error"; r=$?; subtest "Checker: espaços extras na ação -> Error" $r
 [ $r -eq 0 ] && CHK_ERR_PASS=$((CHK_ERR_PASS+1))
 
@@ -553,11 +625,11 @@ if [ "$SKIP_CHECKER" -eq 1 ]; then
 else
 CHK_FALSE_OK=0
 
-res=$(printf 'sa\npb\nrrr\n' | $CHECKER 0 9 1 8 2 7 3 6 4 5 2>/dev/null | tail -1)
+res=$(printf 'sa\npb\nrrr\n' | "$CHECKER" 0 9 1 8 2 7 3 6 4 5 2>/dev/null | tail -1)
 if [ "$res" = "KO" ]; then subtest "[sa,pb,rrr] não ordena -> KO" 0
 else subtest "[sa,pb,rrr] não ordena -> KO (obteve '$res')" 1; CHK_FALSE_OK=1; fi
 
-res=$(printf 'sa\nsa\nsa\n' | $CHECKER 3 1 2 4 5 2>/dev/null | tail -1)
+res=$(printf 'sa\nsa\nsa\n' | "$CHECKER" 3 1 2 4 5 2>/dev/null | tail -1)
 if [ "$res" = "KO" ]; then subtest "Instruções aleatórias inválidas -> KO" 0
 else subtest "Instruções aleatórias inválidas -> KO (obteve '$res')" 1; CHK_FALSE_OK=1; fi
 
@@ -574,18 +646,18 @@ if [ "$SKIP_CHECKER" -eq 1 ]; then
 else
 CHK_TRUE_OK=0
 
-res=$(printf '' | $CHECKER 0 1 2 2>/dev/null | tail -1)
+res=$(printf '' | "$CHECKER" 0 1 2 2>/dev/null | tail -1)
 if [ "$res" = "OK" ]; then subtest "Já ordenado, sem instruções -> OK" 0
 else subtest "Já ordenado, sem instruções -> OK (obteve '$res')" 1; CHK_TRUE_OK=1; fi
 
-res=$(printf 'pb\nra\npb\nra\nsa\nra\npa\npa\n' | $CHECKER 0 9 1 8 2 2>/dev/null | tail -1)
+res=$(printf 'pb\nra\npb\nra\nsa\nra\npa\npa\n' | "$CHECKER" 0 9 1 8 2 2>/dev/null | tail -1)
 if [ "$res" = "OK" ]; then subtest "[pb,ra,pb,ra,sa,ra,pa,pa] ordena -> OK" 0
 else subtest "[pb,ra,pb,ra,sa,ra,pa,pa] ordena -> OK (obteve '$res')" 1; CHK_TRUE_OK=1; fi
 
 if [ "$SKIP_FUNCTIONAL" -eq 0 ]; then
     RAND_ARG=$(shuf -i 1-100 -n 10 | tr '\n' ' ')
-    RAND_INSTR=$($PUSH_SWAP $RAND_ARG 2>/dev/null)
-    res=$(echo "$RAND_INSTR" | $CHECKER $RAND_ARG 2>/dev/null | tail -1)
+    RAND_INSTR=$("$PUSH_SWAP" $RAND_ARG 2>/dev/null)
+    res=$(echo "$RAND_INSTR" | "$CHECKER" $RAND_ARG 2>/dev/null | tail -1)
     if [ "$res" = "OK" ]; then subtest "Instruções reais do push_swap ordenam -> OK" 0
     else subtest "Instruções reais do push_swap ordenam -> OK (obteve '$res')" 1; CHK_TRUE_OK=1; fi
 fi
@@ -597,7 +669,7 @@ fi
 # RESUMO FINAL
 # ------------------------------------------------------------------------- #
 header "RESUMO FINAL"
-for k in "${!SECTION_RESULT[@]}"; do
+for k in "${SECTION_ORDER[@]}"; do
     if [ "${SECTION_RESULT[$k]}" = "PASS" ]; then
         echo -e "  ${GREEN}✔${NC} $k"
     else
