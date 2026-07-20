@@ -61,6 +61,9 @@ Compila `checker.c` com `-Wall -Wextra -Werror` e gera `./checker_linux`.
 
 ```bash
 make test REPO=/caminho/para/o/repositorio/do/aluno
+
+ex.: cd "/home/jami/Downloads/push/push/push_swap com bonus/tester_v3"
+./push_swap_tester.sh .. ./push_swap ./tester_v3/checker_linux
 ```
 
 Se não passar `REPO`, assume o diretório atual (`.`). `make test` compila o
